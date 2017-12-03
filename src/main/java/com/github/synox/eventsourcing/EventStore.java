@@ -7,11 +7,10 @@ import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.iq80.leveldb.Options;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Map;
-import java.util.Spliterator;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -22,11 +21,15 @@ import java.util.stream.StreamSupport;
  * @param <T> the generated Protobuf message class
  */
 public class EventStore<T> implements AutoCloseable {
-    public static final long NO_OFFSET = 0;
+    private static final long NO_OFFSET = 0;
     private Function<byte[], T> parser;
     private Function<T, byte[]> serializer;
     private final DB db;
     private long nextSequenceNr;
+    /**
+     * Close ressources on close
+     */
+    private List<Closeable> closables = new ArrayList<>();
 
     public EventStore(Path dir, Function<byte[], T> parser, Function<T, byte[]> serializer) throws IOException {
         this.parser = parser;
@@ -55,6 +58,9 @@ public class EventStore<T> implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        for (Closeable closable : closables) {
+            closable.close();
+        }
         db.close();
     }
 
@@ -71,10 +77,10 @@ public class EventStore<T> implements AutoCloseable {
 
     public Stream<EventEnvelope<T>> stream(long nextId) throws IOException {
         DBIterator it = db.iterator();
+        closables.add(it);
         it.seek(Longs.toByteArray(nextId));
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(it, Spliterator.ORDERED), false)
                 .map(this::parse);
-        // TODO: close iterator
     }
 
     private EventEnvelope<T> parse(Map.Entry<byte[], byte[]> entry) {
