@@ -1,9 +1,6 @@
 package com.github.synox.eventsourcing;
 
 import com.google.common.primitives.Longs;
-import com.google.protobuf.GeneratedMessageV3;
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.Parser;
 import org.fusesource.leveldbjni.JniDBFactory;
 import org.iq80.leveldb.CompressionType;
 import org.iq80.leveldb.DB;
@@ -15,6 +12,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -23,14 +21,16 @@ import java.util.stream.StreamSupport;
  *
  * @param <T> the generated Protobuf message class
  */
-public class EventStore<T extends GeneratedMessageV3> implements AutoCloseable {
+public class EventStore<T> implements AutoCloseable {
     public static final long NO_OFFSET = 0;
-    private Parser<T> parser;
+    private Function<byte[], T> parser;
+    private Function<T, byte[]> serializer;
     private final DB db;
     private long nextSequenceNr;
 
-    public EventStore(Parser<T> parser, Path dir) throws IOException {
+    public EventStore(Path dir, Function<byte[], T> parser, Function<T, byte[]> serializer) throws IOException {
         this.parser = parser;
+        this.serializer = serializer;
 
         Options options = new Options();
         options.compressionType(CompressionType.SNAPPY);
@@ -60,7 +60,7 @@ public class EventStore<T extends GeneratedMessageV3> implements AutoCloseable {
 
     public long append(T o) {
         long nextId = this.nextSequenceNr++;
-        db.put(Longs.toByteArray(nextId), o.toByteArray());
+        db.put(Longs.toByteArray(nextId), serializer.apply(o));
         return nextId;
     }
 
@@ -78,11 +78,7 @@ public class EventStore<T extends GeneratedMessageV3> implements AutoCloseable {
     }
 
     private EventEnvelope<T> parse(Map.Entry<byte[], byte[]> entry) {
-        try {
-            return new EventEnvelope<>(readKey(entry.getKey()), parser.parseFrom(entry.getValue()));
-        } catch (InvalidProtocolBufferException e) {
-            throw new RuntimeException(e);
-        }
+        return new EventEnvelope<>(readKey(entry.getKey()), parser.apply(entry.getValue()));
     }
 
 
