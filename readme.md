@@ -22,5 +22,6 @@ I use a simple wrapper around leveldb to persist streams of profobuf messages fo
 * SQLite 
 * H2
 
-### To check: 
-https://www.reddit.com/r/golang/comments/26074q/what_is_your_favorite_fast_persistent_keyvalue/
+
+### More 
+https://github.com/Level/awesome/#stores
