@@ -11,6 +11,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -26,6 +27,8 @@ public class EventStore<T> implements AutoCloseable {
     private Function<T, byte[]> serializer;
     private final DB db;
     private long nextSequenceNr;
+    private List<Consumer<EventEnvelope<T>>> consumers = new ArrayList<>();
+
     /**
      * Close ressources on close
      */
@@ -66,21 +69,34 @@ public class EventStore<T> implements AutoCloseable {
 
     public long append(T o) {
         long nextId = this.nextSequenceNr++;
+        // Add to journal
         db.put(Longs.toByteArray(nextId), serializer.apply(o));
+        // Notify subscribers
+        consumers.forEach(c -> c.accept(new EventEnvelope<>(nextId, o)));
         return nextId;
     }
 
 
-    public Stream<EventEnvelope<T>> stream() throws IOException {
+    public Stream<EventEnvelope<T>> stream() {
         return stream(NO_OFFSET);
     }
 
-    public Stream<EventEnvelope<T>> stream(long nextId) throws IOException {
+    public Stream<EventEnvelope<T>> stream(long nextId) {
         DBIterator it = db.iterator();
         closables.add(it);
         it.seek(Longs.toByteArray(nextId));
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(it, Spliterator.ORDERED), false)
                 .map(this::parse);
+    }
+
+    public void subscribe(long nextId, Consumer<EventEnvelope<T>> consumer) {
+        DBIterator it = db.iterator();
+        closables.add(it);
+        it.seek(Longs.toByteArray(nextId));
+        StreamSupport.stream(Spliterators.spliteratorUnknownSize(it, Spliterator.ORDERED), false)
+                .map(this::parse)
+                .forEach(consumer);
+        consumers.add(consumer);
     }
 
     private EventEnvelope<T> parse(Map.Entry<byte[], byte[]> entry) {
@@ -92,4 +108,8 @@ public class EventStore<T> implements AutoCloseable {
         return Longs.fromByteArray(key);
     }
 
+
+    public long getNextSequenceNr() {
+        return nextSequenceNr;
+    }
 }
