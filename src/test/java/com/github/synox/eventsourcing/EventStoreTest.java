@@ -2,6 +2,7 @@ package com.github.synox.eventsourcing;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,7 +19,7 @@ class EventStoreTest {
 
     private EventStore<String> store;
 
-    @org.junit.jupiter.api.Test
+    @Test
     void streamNoOffset() throws IOException {
         assertEquals(Arrays.asList(
                 new EventEnvelope<>(0, "hello1"),
@@ -26,7 +27,7 @@ class EventStoreTest {
                 store.stream().collect(Collectors.toList()));
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     void streamOffset() throws IOException {
         assertEquals(Arrays.asList(
                 new EventEnvelope<>(1, "hello2")),
@@ -59,6 +60,5 @@ class EventStoreTest {
     void close() throws IOException {
         store.close();
     }
-
 
 }
